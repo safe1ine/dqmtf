@@ -6,6 +6,8 @@ import {
   createHexGrid,
   getHexKey,
   getNeighbors,
+  pixelToAxial,
+  roundAxialCoord,
 } from './hex';
 
 describe('hex grid helpers', () => {
@@ -45,5 +47,17 @@ describe('hex grid helpers', () => {
       x: 36,
       y: 20.784609690826528,
     });
+  });
+
+  it('rounds fractional axial coordinates to the nearest hex', () => {
+    expect(roundAxialCoord({ q: 0.2, r: 0.1 })).toEqual({ q: 0, r: 0 });
+    expect(roundAxialCoord({ q: 0.75, r: -0.1 })).toEqual({ q: 1, r: 0 });
+    expect(roundAxialCoord({ q: 0.1, r: 0.75 })).toEqual({ q: 0, r: 1 });
+  });
+
+  it('converts flat-top pixel positions back to axial coordinates', () => {
+    expect(pixelToAxial({ x: 0, y: 0 }, 24)).toEqual({ q: 0, r: 0 });
+    expect(pixelToAxial(axialToPixel({ q: 1, r: 0 }, 24), 24)).toEqual({ q: 1, r: 0 });
+    expect(pixelToAxial(axialToPixel({ q: -1, r: 1 }, 24), 24)).toEqual({ q: -1, r: 1 });
   });
 });
