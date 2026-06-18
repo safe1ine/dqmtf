@@ -70,14 +70,8 @@ describe('game state', () => {
     expect(exit).toBeDefined();
     expect(exitNeighbor).toBeDefined();
 
-    const positioned = {
-      ...state,
-      player: {
-        ...state.player,
-        coord: exitNeighbor?.coord ?? state.player.coord,
-      },
-    };
-    const revealed = revealCell(positioned, state.maze.exitKey);
+    state.player.coord = exitNeighbor?.coord ?? state.player.coord;
+    const revealed = revealCell(state, state.maze.exitKey);
     const result = movePlayer(revealed, exit?.coord ?? state.player.coord);
 
     expect(result.status).toBe('victory');

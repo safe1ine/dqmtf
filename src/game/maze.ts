@@ -4,8 +4,9 @@ import {
   createHexGrid,
   getHexKey,
 } from './hex';
+import { ENTITY_DEFAULTS } from './entities/defaults';
 
-export type CellType = 'empty' | 'wall' | 'exit';
+export type CellType = 'empty' | 'wall' | 'exit' | 'monsterNest';
 
 export interface MazeCell {
   coord: AxialCoord;
@@ -26,6 +27,7 @@ export interface MazeData {
 export interface GenerateMazeOptions {
   radius?: number;
   wallRatio?: number;
+  monsterNestChance?: number;
   seed?: number;
 }
 
@@ -69,6 +71,7 @@ function buildPathToExit(exit: AxialCoord): AxialCoord[] {
 export function generateMaze(options: GenerateMazeOptions = {}): MazeData {
   const radius = options.radius ?? 6;
   const wallRatio = options.wallRatio ?? 0.35;
+  const monsterNestChance = options.monsterNestChance ?? ENTITY_DEFAULTS.monsterNest.generationChance;
   const random = createRandom(options.seed);
   const origin: AxialCoord = { q: 0, r: 0 };
   const coords = createHexGrid(radius);
@@ -96,11 +99,13 @@ export function generateMaze(options: GenerateMazeOptions = {}): MazeData {
     const key = getHexKey(coord);
     const safeStart = axialDistance(coord, origin) <= 1;
     const isExit = key === exitKey;
-    const type: CellType = isExit
-      ? 'exit'
-      : protectedKeys.has(key) || random() > wallRatio
-        ? 'empty'
-        : 'wall';
+    let type: CellType = 'empty';
+
+    if (isExit) {
+      type = 'exit';
+    } else if (!protectedKeys.has(key)) {
+      type = random() <= wallRatio ? 'wall' : random() <= monsterNestChance ? 'monsterNest' : 'empty';
+    }
 
     cells.set(key, {
       coord,

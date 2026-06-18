@@ -136,4 +136,46 @@ describe('generateMaze', () => {
       expect(hasKeyboardPathToExit(maze.cells, maze.startKey, maze.exitKey)).toBe(true);
     }
   });
+
+  it('generates monster nests only on non-protected cells', () => {
+    const maze = generateMaze({ radius: 10, seed: 4, wallRatio: 0, monsterNestChance: 1 });
+    const monsterNests = [...maze.cells.values()].filter((cell) => cell.type === 'monsterNest');
+    const exit = maze.cells.get(maze.exitKey);
+
+    expect(monsterNests.length).toBeGreaterThan(0);
+    expect(exit?.type).toBe('exit');
+
+    for (const cell of maze.cells.values()) {
+      if (axialDistance(cell.coord, { q: 0, r: 0 }) <= 1) {
+        expect(cell.type).toBe('empty');
+      }
+    }
+
+    if (!exit) {
+      throw new Error('Expected generated maze to include an exit');
+    }
+
+    const protectedPath = [{ q: 0, r: 0 }];
+    let current = { q: 0, r: 0 };
+
+    while (current.q !== exit.coord.q) {
+      current = {
+        q: current.q + Math.sign(exit.coord.q - current.q),
+        r: current.r,
+      };
+      protectedPath.push(current);
+    }
+
+    while (current.r !== exit.coord.r) {
+      current = {
+        q: current.q,
+        r: current.r + Math.sign(exit.coord.r - current.r),
+      };
+      protectedPath.push(current);
+    }
+
+    for (const coord of protectedPath) {
+      expect(maze.cells.get(getHexKey(coord))?.type).not.toBe('monsterNest');
+    }
+  });
 });

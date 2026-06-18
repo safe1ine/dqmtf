@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { type AxialCoord, axialDistance } from './hex';
 import { calculateMapLayout, interpolateAxialCoord, type ScreenPoint } from './mapLayout';
 import { type MazeCell } from './maze';
+import { tickCombat } from './combat';
 import {
   createGameState,
   getGameSummary,
@@ -20,6 +21,12 @@ const COLORS = {
   empty: 0xdfe8d2,
   wall: 0x2b3029,
   exit: 0xd69732,
+  monsterNest: 0x8f3d5b,
+  monster: 0xc93932,
+  hpBack: 0x1b1f1a,
+  hpFill: 0x54c878,
+  attackLine: 0x66d9ff,
+  monsterAttackLine: 0xff715b,
   stroke: 0xffffff,
   player: 0x2f6fed,
   hold: 0x46b36d,
@@ -42,9 +49,17 @@ interface MovementAnimation {
   startedAt: number;
 }
 
+interface AttackEffect {
+  from: AxialCoord;
+  to: AxialCoord;
+  expiresAt: number;
+  color: number;
+}
+
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
   private mapGraphics!: Phaser.GameObjects.Graphics;
+  private combatGraphics!: Phaser.GameObjects.Graphics;
   private playerGraphics!: Phaser.GameObjects.Graphics;
   private holdGraphics!: Phaser.GameObjects.Graphics;
   private cellCenters = new Map<string, ScreenPoint>();
@@ -53,6 +68,7 @@ export class GameScene extends Phaser.Scene {
   private holdStartedAt = 0;
   private holdTimer: Phaser.Time.TimerEvent | null = null;
   private movementAnimation: MovementAnimation | null = null;
+  private attackEffects: AttackEffect[] = [];
   private victoryEmitted = false;
 
   constructor() {
@@ -62,6 +78,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.state = createGameState();
     this.mapGraphics = this.add.graphics();
+    this.combatGraphics = this.add.graphics();
     this.playerGraphics = this.add.graphics();
     this.holdGraphics = this.add.graphics();
 
@@ -76,8 +93,16 @@ export class GameScene extends Phaser.Scene {
     this.emitState();
   }
 
-  update(): void {
+  update(time: number, delta: number): void {
     this.updateMovementAnimation();
+
+    if (!this.movementAnimation) {
+      tickCombat(this.state, { elapsedMs: delta, nowMs: time });
+      this.recordCombatEffects(time);
+      this.renderScene();
+      this.emitState();
+    }
+
     this.drawHoldProgress();
   }
 
@@ -161,12 +186,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderScene(): void {
-    if (!this.mapGraphics || !this.playerGraphics) {
+    if (!this.mapGraphics || !this.playerGraphics || !this.combatGraphics) {
       return;
     }
 
     this.updateLayout();
     this.mapGraphics.clear();
+    this.combatGraphics.clear();
 
     for (const cell of this.state.maze.cells.values()) {
       const center = this.cellCenters.get(cell.key);
@@ -178,6 +204,8 @@ export class GameScene extends Phaser.Scene {
       this.drawHex(this.mapGraphics, center, this.hexSize, this.getCellFill(cell));
     }
 
+    this.drawCombatEntities();
+    this.drawAttackEffects();
     this.drawPlayer();
   }
 
@@ -208,7 +236,51 @@ export class GameScene extends Phaser.Scene {
       return COLORS.exit;
     }
 
+    if (cell.type === 'monsterNest') {
+      return COLORS.monsterNest;
+    }
+
     return COLORS.empty;
+  }
+
+  private drawCombatEntities(): void {
+    for (const nest of this.state.monsterNests.values()) {
+      if (!nest.revealed || !nest.isAlive()) {
+        continue;
+      }
+
+      const center = this.cellCenters.get(nest.key);
+
+      if (!center) {
+        continue;
+      }
+
+      this.drawHpBar(this.combatGraphics, center, this.hexSize * 1.2, -this.hexSize * 0.72, nest.hp / nest.maxHp);
+    }
+
+    for (const monster of this.state.monsters) {
+      if (!monster.isAlive()) {
+        continue;
+      }
+
+      const center = this.cellCenters.get(`${monster.coord.q},${monster.coord.r}`);
+
+      if (!center) {
+        continue;
+      }
+
+      this.combatGraphics.fillStyle(COLORS.monster, 1);
+      this.combatGraphics.lineStyle(2, COLORS.stroke, 0.9);
+      this.combatGraphics.fillCircle(center.x, center.y - this.hexSize * 0.22, this.hexSize * 0.2);
+      this.combatGraphics.strokeCircle(center.x, center.y - this.hexSize * 0.22, this.hexSize * 0.2);
+      this.drawHpBar(
+        this.combatGraphics,
+        { x: center.x, y: center.y - this.hexSize * 0.22 },
+        this.hexSize * 0.7,
+        -this.hexSize * 0.34,
+        monster.hp / monster.maxHp,
+      );
+    }
   }
 
   private drawPlayer(): void {
@@ -223,6 +295,62 @@ export class GameScene extends Phaser.Scene {
 
     this.playerGraphics.fillCircle(center.x, center.y, this.hexSize * 0.35);
     this.playerGraphics.strokeCircle(center.x, center.y, this.hexSize * 0.35);
+  }
+
+  private recordCombatEffects(nowMs: number): void {
+    for (const event of this.state.combatEvents) {
+      if (event.type !== 'playerAttack' && event.type !== 'monsterAttack') {
+        continue;
+      }
+
+      this.attackEffects.push({
+        from: event.from,
+        to: event.to,
+        expiresAt: nowMs + 140,
+        color: event.type === 'playerAttack' ? COLORS.attackLine : COLORS.monsterAttackLine,
+      });
+    }
+
+    this.attackEffects = this.attackEffects.filter((effect) => effect.expiresAt > nowMs);
+  }
+
+  private drawAttackEffects(): void {
+    for (const effect of this.attackEffects) {
+      const from = this.getCoordCenter(effect.from);
+      const to = this.getCoordCenter(effect.to);
+
+      if (!from || !to) {
+        continue;
+      }
+
+      this.combatGraphics.lineStyle(4, effect.color, 0.8);
+      this.combatGraphics.beginPath();
+      this.combatGraphics.moveTo(from.x, from.y);
+      this.combatGraphics.lineTo(to.x, to.y);
+      this.combatGraphics.strokePath();
+    }
+  }
+
+  private getCoordCenter(coord: AxialCoord): ScreenPoint | null {
+    return this.cellCenters.get(`${coord.q},${coord.r}`) ?? null;
+  }
+
+  private drawHpBar(
+    graphics: Phaser.GameObjects.Graphics,
+    center: ScreenPoint,
+    width: number,
+    yOffset: number,
+    ratio: number,
+  ): void {
+    const height = 7;
+    const x = center.x - width / 2;
+    const y = center.y + yOffset;
+    const fillWidth = width * Phaser.Math.Clamp(ratio, 0, 1);
+
+    graphics.fillStyle(COLORS.hpBack, 0.85);
+    graphics.fillRect(x, y, width, height);
+    graphics.fillStyle(COLORS.hpFill, 1);
+    graphics.fillRect(x, y, fillWidth, height);
   }
 
   private updateMovementAnimation(): void {
