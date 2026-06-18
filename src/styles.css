@@ -18,6 +18,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow: hidden;
 }
 
 button {
@@ -74,4 +75,100 @@ h1 {
 
 .primary-button:hover {
   background: #1c5b39;
+}
+
+.game-screen {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: #edf3e7;
+}
+
+.status-bar {
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(92px, 1fr));
+  gap: 1px;
+  align-items: stretch;
+  padding: 0;
+  color: #f7fbf3;
+  background: #243024;
+  border-bottom: 3px solid #d69732;
+}
+
+.status-item {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  justify-items: center;
+  padding: 10px 8px;
+  background: #172018;
+  text-align: center;
+}
+
+.status-label {
+  max-width: 100%;
+  color: #b7c7ad;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.status-item strong {
+  max-width: 100%;
+  color: #ffffff;
+  font-size: clamp(1rem, 2.4vw, 1.35rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.game-screen.is-victory .status-bar {
+  border-bottom-color: #46b36d;
+}
+
+.game-screen.is-victory #game-status {
+  color: #7ff0a1;
+}
+
+.map-area {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(237, 243, 231, 0.96), rgba(237, 243, 231, 0.96)),
+    repeating-linear-gradient(0deg, #dfe8d2 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, #dfe8d2 0 1px, transparent 1px 32px);
+}
+
+#game-container {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+#game-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 640px) {
+  .status-bar {
+    grid-template-columns: repeat(5, minmax(64px, 1fr));
+    min-height: 68px;
+  }
+
+  .status-item {
+    padding: 8px 4px;
+  }
+
+  .status-label {
+    font-size: 0.68rem;
+  }
+
+  .status-item strong {
+    font-size: 0.92rem;
+  }
 }
