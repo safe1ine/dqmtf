@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import './styles.css';
 import { GameScene } from './game/GameScene';
 import type { GameSummary } from './game/state';
+import { calculateGameViewport } from './layout/gameViewport';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -78,19 +79,19 @@ function renderGame(): void {
   `;
 
   const container = document.querySelector<HTMLDivElement>('#game-container');
+  const mapArea = document.querySelector<HTMLElement>('.map-area');
 
-  if (!container) {
-    throw new Error('Missing #game-container element');
+  if (!container || !mapArea) {
+    throw new Error('Missing game container or map area element');
   }
 
-  const width = Math.max(320, container.clientWidth);
-  const height = Math.max(240, container.clientHeight);
+  const initialSize = resizeGameViewport(mapArea, container);
 
   game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: container,
-    width,
-    height,
+    width: initialSize.width,
+    height: initialSize.height,
     backgroundColor: '#edf3e7',
     scene: [GameScene],
     scale: {
@@ -106,9 +107,25 @@ function renderGame(): void {
       return;
     }
 
-    game.scale.resize(Math.max(320, container.clientWidth), Math.max(240, container.clientHeight));
+    const nextSize = resizeGameViewport(mapArea, container);
+    game.scale.resize(nextSize.width, nextSize.height);
   });
-  resizeObserver.observe(container);
+  resizeObserver.observe(mapArea);
+}
+
+function resizeGameViewport(
+  mapArea: HTMLElement,
+  container: HTMLDivElement,
+): { width: number; height: number } {
+  const size = calculateGameViewport({
+    width: mapArea.clientWidth,
+    height: mapArea.clientHeight,
+  });
+
+  container.style.width = `${size.width}px`;
+  container.style.height = `${size.height}px`;
+
+  return size;
 }
 
 function updateStatusBar(summary: GameSummary): void {
