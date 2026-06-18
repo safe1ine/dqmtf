@@ -677,9 +677,10 @@ describe('game state', () => {
 
   it('does not move into covered cells', () => {
     const state = createGameState(9);
-    const result = movePlayer(state, { q: 1, r: 0 });
+    const movedToSafeNeighbor = movePlayer(state, { q: 1, r: 0 });
+    const result = movePlayer(movedToSafeNeighbor, { q: 2, r: 0 });
 
-    expect(result.player.coord).toEqual({ q: 0, r: 0 });
+    expect(result.player.coord).toEqual({ q: 1, r: 0 });
   });
 
   it('moves into revealed empty neighbor cells', () => {
