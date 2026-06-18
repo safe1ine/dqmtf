@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getHexKey } from './hex';
-import { calculateMapLayout, interpolateAxialCoord, MAP_HEX_SIZE } from './mapLayout';
+import { axialToPixel, getHexKey } from './hex';
+import { calculateMapLayout, MAP_HEX_SIZE } from './mapLayout';
 
 describe('calculateMapLayout', () => {
   const cells = [
@@ -46,26 +46,21 @@ describe('calculateMapLayout', () => {
     expect(rightNeighbor?.y).toBeCloseTo(405.0, 1);
   });
 
-  it('interpolates between axial coordinates for smooth movement', () => {
-    expect(interpolateAxialCoord({ q: 0, r: 0 }, { q: 1, r: 0 }, 0.5)).toEqual({
-      q: 0.5,
-      r: 0,
-    });
-    expect(interpolateAxialCoord({ q: 0, r: 0 }, { q: 0, r: 1 }, 0.25)).toEqual({
-      q: 0,
-      r: 0.25,
-    });
-  });
-
-  it('supports fractional focus coordinates during movement animation', () => {
+  it('supports continuous world focus positions during movement', () => {
+    const focusWorldPosition = {
+      x: axialToPixel({ q: 0, r: 0 }, MAP_HEX_SIZE).x + 12,
+      y: axialToPixel({ q: 0, r: 0 }, MAP_HEX_SIZE).y + 8,
+    };
     const layout = calculateMapLayout({
       cells,
-      playerCoord: { q: 0.5, r: 0 },
+      focusWorldPosition,
       viewport: { width: 1440, height: 713 },
     });
     const originCenter = layout.cellCenters.get(getHexKey({ q: 0, r: 0 }));
 
-    expect(originCenter?.x).toBeCloseTo(678, 3);
-    expect(originCenter?.y).toBeCloseTo(332.251, 3);
+    expect(originCenter).toEqual({
+      x: 708,
+      y: 348.5,
+    });
   });
 });

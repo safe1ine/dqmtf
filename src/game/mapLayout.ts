@@ -1,4 +1,4 @@
-import { type AxialCoord, axialToPixel } from './hex';
+import { type AxialCoord, axialToPixel, type PixelPoint } from './hex';
 
 export const MAP_HEX_SIZE = 56;
 
@@ -12,10 +12,7 @@ export interface MapViewport {
   height: number;
 }
 
-export interface ScreenPoint {
-  x: number;
-  y: number;
-}
+export type ScreenPoint = PixelPoint;
 
 export interface MapLayout {
   hexSize: number;
@@ -37,10 +34,12 @@ export function interpolateAxialCoord(
 
 export function calculateMapLayout(options: {
   cells: Iterable<LayoutCell>;
-  playerCoord: AxialCoord;
+  playerCoord?: AxialCoord;
+  focusWorldPosition?: PixelPoint;
   viewport: MapViewport;
 }): MapLayout {
-  const playerPixel = axialToPixel(options.playerCoord, MAP_HEX_SIZE);
+  const focusWorldPosition =
+    options.focusWorldPosition ?? axialToPixel(options.playerCoord ?? { q: 0, r: 0 }, MAP_HEX_SIZE);
   const viewportCenter = {
     x: options.viewport.width / 2,
     y: options.viewport.height / 2,
@@ -51,8 +50,8 @@ export function calculateMapLayout(options: {
     const pixel = axialToPixel(cell.coord, MAP_HEX_SIZE);
 
     cellCenters.set(cell.key, {
-      x: viewportCenter.x + pixel.x - playerPixel.x,
-      y: viewportCenter.y + pixel.y - playerPixel.y,
+      x: viewportCenter.x + pixel.x - focusWorldPosition.x,
+      y: viewportCenter.y + pixel.y - focusWorldPosition.y,
     });
   }
 
