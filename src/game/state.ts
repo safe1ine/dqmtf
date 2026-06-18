@@ -1,10 +1,20 @@
-import { type AxialCoord, axialDistance, getHexKey } from './hex';
+import {
+  type AxialCoord,
+  type PixelPoint,
+  axialDistance,
+  axialToPixel,
+  getHexKey,
+  pixelToAxial,
+} from './hex';
 import { generateMaze, type MazeData } from './maze';
+import { MAP_HEX_SIZE } from './mapLayout';
 import { MonsterNestCellEntity } from './entities/cells';
 import { MonsterEntity } from './entities/MonsterEntity';
 import { PlayerEntity } from './entities/PlayerEntity';
 
 export const GAME_MAP_RADIUS = 10;
+
+const MAX_PLAYER_MOVEMENT_STEP_PIXELS = MAP_HEX_SIZE * 0.45;
 
 export type GameStatus = 'exploring' | 'victory';
 
@@ -73,6 +83,7 @@ export function createGameState(seed?: number): GameState {
     player: new PlayerEntity({
       id: 'player',
       coord: { q: 0, r: 0 },
+      worldPosition: axialToPixel({ q: 0, r: 0 }, MAP_HEX_SIZE),
     }),
     monsterNests,
     monsters: [],
@@ -118,18 +129,86 @@ export function movePlayer(state: GameState, coord: AxialCoord): GameState {
     return state;
   }
 
+  const moved = applyPlayerWorldPosition(state, axialToPixel(coord, MAP_HEX_SIZE));
+
+  return moved ? { ...state } : state;
+}
+
+export function isPlayerWalkableCoord(state: GameState, coord: AxialCoord): boolean {
   const target = state.maze.cells.get(getHexKey(coord));
 
-  if (!target || !target.revealed || (target.type !== 'empty' && target.type !== 'exit')) {
+  if (!target || !target.revealed) {
+    return false;
+  }
+
+  if (target.type === 'monsterNest') {
+    const nest = [...state.monsterNests.values()].find((candidate) => candidate.key === target.key);
+
+    return nest ? !nest.isAlive() : false;
+  }
+
+  return target.type === 'empty' || target.type === 'exit';
+}
+
+function applyPlayerWorldPosition(state: GameState, worldPosition: PixelPoint): boolean {
+  if (state.status === 'victory') {
+    return false;
+  }
+
+  const coord = pixelToAxial(worldPosition, MAP_HEX_SIZE);
+
+  if (!isPlayerWalkableCoord(state, coord)) {
+    return false;
+  }
+
+  state.player.worldPosition = { ...worldPosition };
+  state.player.coord = coord;
+
+  const target = state.maze.cells.get(getHexKey(coord));
+
+  if (target?.type === 'exit') {
+    state.status = 'victory';
+  }
+
+  return true;
+}
+
+function applyPlayerMovementStep(state: GameState, step: PixelPoint): void {
+  const current = state.player.worldPosition;
+  const fullCandidate = {
+    x: current.x + step.x,
+    y: current.y + step.y,
+  };
+
+  applyPlayerWorldPosition(state, fullCandidate);
+}
+
+export function movePlayerByWorldDelta(state: GameState, delta: PixelPoint): GameState {
+  if (state.status === 'victory') {
     return state;
   }
 
-  state.player.coord = { ...coord };
+  const distance = Math.hypot(delta.x, delta.y);
 
-  return {
-    ...state,
-    status: target.type === 'exit' ? 'victory' : state.status,
+  if (distance === 0) {
+    return state;
+  }
+
+  const stepCount = Math.max(1, Math.ceil(distance / MAX_PLAYER_MOVEMENT_STEP_PIXELS));
+  const step = {
+    x: delta.x / stepCount,
+    y: delta.y / stepCount,
   };
+
+  for (let index = 0; index < stepCount; index += 1) {
+    applyPlayerMovementStep(state, step);
+
+    if (state.status === 'victory') {
+      break;
+    }
+  }
+
+  return state;
 }
 
 export function getGameSummary(state: GameState): GameSummary {
