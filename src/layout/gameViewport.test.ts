@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateGameViewport } from './gameViewport';
+import { calculateGameScale, calculateGameViewport } from './gameViewport';
 
 describe('calculateGameViewport', () => {
   it('caps wide available space at 1440 by 810', () => {
@@ -35,5 +35,11 @@ describe('calculateGameViewport', () => {
       width: 0,
       height: 0,
     });
+  });
+
+  it('calculates the fixed-frame scale from viewport width', () => {
+    expect(calculateGameScale({ width: 1440, height: 810 })).toBe(1);
+    expect(calculateGameScale({ width: 720, height: 405 })).toBe(0.5);
+    expect(calculateGameScale({ width: 8000 / 9, height: 500 })).toBeCloseTo(0.617, 3);
   });
 });
