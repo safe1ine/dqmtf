@@ -64,7 +64,7 @@ export function revealCell(state: GameState, key: string): GameState {
   const maze = cloneMaze(state.maze);
   const cell = maze.cells.get(key);
 
-  if (!cell || cell.revealed) {
+  if (!cell || cell.revealed || axialDistance(state.player.coord, cell.coord) !== 1) {
     return state;
   }
 

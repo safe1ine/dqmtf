@@ -16,18 +16,31 @@ describe('game state', () => {
 
   it('reveals a covered cell once', () => {
     const state = createGameState(8);
-    const covered = [...state.maze.cells.values()].find(
-      (cell) => !cell.revealed && cell.type !== 'wall',
-    );
+    const movedToSafeNeighbor = movePlayer(state, { q: 1, r: 0 });
+    const covered = movedToSafeNeighbor.maze.cells.get(getHexKey({ q: 2, r: 0 }));
 
     expect(covered).toBeDefined();
+    expect(covered?.revealed).toBe(false);
 
-    const first = revealCell(state, covered?.key ?? '');
+    const first = revealCell(movedToSafeNeighbor, covered?.key ?? '');
     const second = revealCell(first, covered?.key ?? '');
 
     expect(first.maze.cells.get(covered?.key ?? '')?.revealed).toBe(true);
     expect(first.stats.revealedCells).toBe(8);
     expect(second.stats.revealedCells).toBe(8);
+  });
+
+  it('does not reveal covered cells farther than one hex from the player', () => {
+    const state = createGameState(8);
+    const farCell = state.maze.cells.get(getHexKey({ q: 2, r: 0 }));
+
+    expect(farCell).toBeDefined();
+    expect(farCell?.revealed).toBe(false);
+
+    const result = revealCell(state, farCell?.key ?? '');
+
+    expect(result.maze.cells.get(farCell?.key ?? '')?.revealed).toBe(false);
+    expect(result.stats.revealedCells).toBe(7);
   });
 
   it('does not move into covered cells', () => {

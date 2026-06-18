@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { type AxialCoord } from './hex';
+import { type AxialCoord, axialDistance } from './hex';
 import { calculateMapLayout, interpolateAxialCoord, type ScreenPoint } from './mapLayout';
 import { type MazeCell } from './maze';
 import {
@@ -124,7 +124,7 @@ export class GameScene extends Phaser.Scene {
 
     const cell = this.findCellAt(pointer.x, pointer.y);
 
-    if (!cell || cell.revealed) {
+    if (!cell || cell.revealed || axialDistance(this.state.player.coord, cell.coord) !== 1) {
       return;
     }
 
