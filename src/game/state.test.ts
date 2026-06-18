@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { axialToPixel, getHexKey, getNeighbors } from './hex';
+import { axialToPixel, getHexKey } from './hex';
 import { MAP_HEX_SIZE } from './mapLayout';
 import {
   createGameState,
   GAME_MAP_RADIUS,
   getGameSummary,
   isPlayerWalkableCoord,
+  isPlayerWalkableWorldPosition,
   movePlayer,
   movePlayerByWorldDelta,
   revealCell,
@@ -119,13 +120,46 @@ describe('game state', () => {
     wall!.type = 'wall';
     wall!.revealed = true;
     state.player.coord = { q: 0, r: 0 };
-    state.player.worldPosition = { x: 40, y: -20 };
+    state.player.worldPosition = { x: 15, y: 0 };
 
     movePlayerByWorldDelta(state, { x: 10, y: 0 });
 
     expect(state.player.coord).toEqual({ q: 0, r: 0 });
-    expect(state.player.worldPosition.x).toBeGreaterThan(40);
-    expect(state.player.worldPosition.y).toBeGreaterThan(-20);
+    expect(state.player.worldPosition.x).toBeGreaterThan(15);
+    expect(state.player.worldPosition.y).toBeGreaterThan(0);
+  });
+
+  it('blocks movement when a lower-body sample point enters a wall', () => {
+    const state = createGameState(17);
+    const wall = state.maze.cells.get(getHexKey({ q: 1, r: -1 }));
+
+    expect(wall).toBeDefined();
+    wall!.type = 'wall';
+    wall!.revealed = true;
+
+    const candidate = { x: 28, y: 0 };
+
+    expect(isPlayerWalkableWorldPosition(state, candidate)).toBe(false);
+    movePlayerByWorldDelta(state, candidate);
+    expect(state.player.coord).toEqual({ q: 0, r: 0 });
+  });
+
+  it('allows upper-body visual overlap when lower-body samples remain walkable', () => {
+    const state = createGameState(18);
+    const upperWall = state.maze.cells.get(getHexKey({ q: 0, r: -1 }));
+
+    expect(upperWall).toBeDefined();
+    upperWall!.type = 'wall';
+    upperWall!.revealed = true;
+
+    state.player.coord = { q: 0, r: 1 };
+    state.player.worldPosition = { x: 0, y: 55 };
+    const candidate = { x: 10, y: 55 };
+
+    expect(isPlayerWalkableWorldPosition(state, candidate)).toBe(true);
+    movePlayerByWorldDelta(state, { x: 10, y: 0 });
+    expect(state.player.worldPosition.x).toBeCloseTo(10, 6);
+    expect(state.player.worldPosition.y).toBeCloseTo(55, 6);
   });
 
   it('blocks living monster nests and allows destroyed nests converted to empty cells', () => {
@@ -199,19 +233,20 @@ describe('game state', () => {
 
   it('wins after moving onto a revealed exit cell', () => {
     const state = createGameState(11);
-    const exit = state.maze.cells.get(state.maze.exitKey);
-    const exitNeighbor = exit
-      ? getNeighbors(exit.coord)
-          .map((coord) => state.maze.cells.get(getHexKey(coord)))
-          .find((cell) => cell && cell.type !== 'wall')
-      : undefined;
+    const exitKey = getHexKey({ q: 1, r: 0 });
+    const exit = state.maze.cells.get(exitKey);
+    const upperFootprintCell = state.maze.cells.get(getHexKey({ q: 1, r: -1 }));
 
     expect(exit).toBeDefined();
-    expect(exitNeighbor).toBeDefined();
+    expect(upperFootprintCell).toBeDefined();
 
-    state.player.coord = exitNeighbor?.coord ?? state.player.coord;
-    const revealed = revealCell(state, state.maze.exitKey);
-    const result = movePlayer(revealed, exit?.coord ?? state.player.coord);
+    exit!.type = 'exit';
+    exit!.revealed = true;
+    upperFootprintCell!.type = 'empty';
+    upperFootprintCell!.revealed = true;
+    state.maze.exitKey = exitKey;
+
+    const result = movePlayer(state, exit?.coord ?? state.player.coord);
 
     expect(result.status).toBe('victory');
     expect(result.player.coord).toEqual(exit?.coord);

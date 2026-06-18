@@ -8,6 +8,7 @@ import {
 } from './hex';
 import { generateMaze, type MazeData } from './maze';
 import { MAP_HEX_SIZE } from './mapLayout';
+import { getPlayerLowerBodyCollisionSamplePoints } from './playerCollision';
 import { MonsterNestCellEntity } from './entities/cells';
 import { MonsterEntity } from './entities/MonsterEntity';
 import { PlayerEntity } from './entities/PlayerEntity';
@@ -150,16 +151,28 @@ export function isPlayerWalkableCoord(state: GameState, coord: AxialCoord): bool
   return target.type === 'empty' || target.type === 'exit';
 }
 
+export function isPlayerWalkableWorldPosition(state: GameState, worldPosition: PixelPoint): boolean {
+  return getPlayerBlockedCoord(state, worldPosition) === null;
+}
+
+function getPlayerBlockedCoord(state: GameState, worldPosition: PixelPoint): AxialCoord | null {
+  for (const sample of getPlayerLowerBodyCollisionSamplePoints(worldPosition, MAP_HEX_SIZE)) {
+    const coord = pixelToAxial(sample, MAP_HEX_SIZE);
+
+    if (!isPlayerWalkableCoord(state, coord)) {
+      return coord;
+    }
+  }
+
+  return null;
+}
+
 function applyPlayerWorldPosition(state: GameState, worldPosition: PixelPoint): boolean {
-  if (state.status === 'victory') {
+  if (state.status === 'victory' || !isPlayerWalkableWorldPosition(state, worldPosition)) {
     return false;
   }
 
   const coord = pixelToAxial(worldPosition, MAP_HEX_SIZE);
-
-  if (!isPlayerWalkableCoord(state, coord)) {
-    return false;
-  }
 
   state.player.worldPosition = { ...worldPosition };
   state.player.coord = coord;
@@ -184,7 +197,12 @@ function applyPlayerMovementStep(state: GameState, step: PixelPoint): void {
     return;
   }
 
-  const blockedCoord = pixelToAxial(fullCandidate, MAP_HEX_SIZE);
+  const blockedCoord = getPlayerBlockedCoord(state, fullCandidate);
+
+  if (!blockedCoord) {
+    return;
+  }
+
   const slideStep = getBlockedEdgeSlideStep(state, blockedCoord, step);
 
   if (!slideStep) {
