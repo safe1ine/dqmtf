@@ -180,7 +180,59 @@ function applyPlayerMovementStep(state: GameState, step: PixelPoint): void {
     y: current.y + step.y,
   };
 
-  applyPlayerWorldPosition(state, fullCandidate);
+  if (applyPlayerWorldPosition(state, fullCandidate)) {
+    return;
+  }
+
+  const blockedCoord = pixelToAxial(fullCandidate, MAP_HEX_SIZE);
+  const slideStep = getBlockedEdgeSlideStep(state, blockedCoord, step);
+
+  if (!slideStep) {
+    return;
+  }
+
+  applyPlayerWorldPosition(state, {
+    x: current.x + slideStep.x,
+    y: current.y + slideStep.y,
+  });
+}
+
+function getBlockedEdgeSlideStep(
+  state: GameState,
+  blockedCoord: AxialCoord,
+  step: PixelPoint,
+): PixelPoint | null {
+  if (axialDistance(state.player.coord, blockedCoord) !== 1) {
+    return null;
+  }
+
+  const currentCenter = axialToPixel(state.player.coord, MAP_HEX_SIZE);
+  const blockedCenter = axialToPixel(blockedCoord, MAP_HEX_SIZE);
+  const normal = {
+    x: blockedCenter.x - currentCenter.x,
+    y: blockedCenter.y - currentCenter.y,
+  };
+  const tangent = {
+    x: -normal.y,
+    y: normal.x,
+  };
+  const tangentLengthSquared = tangent.x * tangent.x + tangent.y * tangent.y;
+
+  if (tangentLengthSquared === 0) {
+    return null;
+  }
+
+  const dot = step.x * tangent.x + step.y * tangent.y;
+  const slideStep = {
+    x: (dot / tangentLengthSquared) * tangent.x,
+    y: (dot / tangentLengthSquared) * tangent.y,
+  };
+
+  if (Math.hypot(slideStep.x, slideStep.y) < 0.001) {
+    return null;
+  }
+
+  return slideStep;
 }
 
 export function movePlayerByWorldDelta(state: GameState, delta: PixelPoint): GameState {
@@ -202,10 +254,6 @@ export function movePlayerByWorldDelta(state: GameState, delta: PixelPoint): Gam
 
   for (let index = 0; index < stepCount; index += 1) {
     applyPlayerMovementStep(state, step);
-
-    if (state.status === 'victory') {
-      break;
-    }
   }
 
   return state;

@@ -111,6 +111,23 @@ describe('game state', () => {
     expect(state.player.coord).toEqual({ q: 0, r: 0 });
   });
 
+  it('slides the player downward when pushing into an upper-right sloped wall', () => {
+    const state = createGameState(13);
+    const wall = state.maze.cells.get(getHexKey({ q: 1, r: -1 }));
+
+    expect(wall).toBeDefined();
+    wall!.type = 'wall';
+    wall!.revealed = true;
+    state.player.coord = { q: 0, r: 0 };
+    state.player.worldPosition = { x: 40, y: -20 };
+
+    movePlayerByWorldDelta(state, { x: 10, y: 0 });
+
+    expect(state.player.coord).toEqual({ q: 0, r: 0 });
+    expect(state.player.worldPosition.x).toBeGreaterThan(40);
+    expect(state.player.worldPosition.y).toBeGreaterThan(-20);
+  });
+
   it('blocks living monster nests and allows destroyed nests converted to empty cells', () => {
     const state = createGameState(14);
     const key = getHexKey({ q: 1, r: 0 });
