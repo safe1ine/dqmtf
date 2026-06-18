@@ -1,20 +1,48 @@
 import Phaser from 'phaser';
-import { type AxialCoord, axialDistance } from './hex';
-import { calculateMapLayout, interpolateAxialCoord, type ScreenPoint } from './mapLayout';
+import { HEX_DIRECTIONS, type AxialCoord, axialDistance, axialToPixel } from './hex';
+import { calculateMapLayout, type ScreenPoint } from './mapLayout';
 import { type MazeCell } from './maze';
 import { tickCombat } from './combat';
 import {
+  getMovementDirectionForKey,
+  getMovementVector,
+  type MovementDirection,
+} from './movementInput';
+import {
+  getPlayerDirectionForVector,
+  getPlayerSpriteDisplaySize,
+  PLAYER_SPRITE_ASSETS,
+  type PlayerDirection,
+} from './playerSprites';
+import {
+  getCellTileVisual,
+  getHexTileDisplaySize,
+  getRevealedWallConnections,
+  getWallOverlaySegments,
+  getUnlockAnimationVisual,
+  TILE_ASSETS,
+  UNLOCK_ANIMATION_TOTAL_MS,
+  type WallOverlaySegment,
+} from './tileRendering';
+import {
   createGameState,
   getGameSummary,
-  movePlayer,
+  movePlayerByWorldDelta,
   revealCell,
   type GameState,
 } from './state';
 
 export const GAME_SCENE_KEY = 'GameScene';
 
-const HOLD_DURATION_MS = 600;
-const MOVE_DURATION_MS = 220;
+const HOLD_DURATION_MS = UNLOCK_ANIMATION_TOTAL_MS;
+
+const DEPTHS = {
+  map: 10,
+  coveredTiles: 11,
+  wallOverlay: 12,
+  combat: 20,
+  player: 30,
+};
 
 const COLORS = {
   covered: 0x6f776b,
@@ -29,25 +57,7 @@ const COLORS = {
   monsterAttackLine: 0xff715b,
   stroke: 0xffffff,
   player: 0x2f6fed,
-  hold: 0x46b36d,
 };
-
-const KEY_MOVES: Record<string, AxialCoord> = {
-  arrowright: { q: 1, r: 0 },
-  d: { q: 1, r: 0 },
-  arrowleft: { q: -1, r: 0 },
-  a: { q: -1, r: 0 },
-  arrowup: { q: 0, r: -1 },
-  w: { q: 0, r: -1 },
-  arrowdown: { q: 0, r: 1 },
-  s: { q: 0, r: 1 },
-};
-
-interface MovementAnimation {
-  from: AxialCoord;
-  to: AxialCoord;
-  startedAt: number;
-}
 
 interface AttackEffect {
   from: AxialCoord;
@@ -56,18 +66,25 @@ interface AttackEffect {
   color: number;
 }
 
+interface UnlockAnimation {
+  startedAt: number;
+}
+
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
   private mapGraphics!: Phaser.GameObjects.Graphics;
+  private wallGraphics!: Phaser.GameObjects.Graphics;
   private combatGraphics!: Phaser.GameObjects.Graphics;
-  private playerGraphics!: Phaser.GameObjects.Graphics;
-  private holdGraphics!: Phaser.GameObjects.Graphics;
+  private playerImage!: Phaser.GameObjects.Image;
+  private tileImages = new Map<string, Phaser.GameObjects.Image>();
+  private wallOverlayImages = new Map<string, Phaser.GameObjects.Image>();
   private cellCenters = new Map<string, ScreenPoint>();
   private hexSize = 24;
   private holdTargetKey: string | null = null;
-  private holdStartedAt = 0;
   private holdTimer: Phaser.Time.TimerEvent | null = null;
-  private movementAnimation: MovementAnimation | null = null;
+  private heldMovementDirections = new Set<MovementDirection>();
+  private lastPlayerDirection: PlayerDirection = 'front';
+  private unlockAnimations = new Map<string, UnlockAnimation>();
   private attackEffects: AttackEffect[] = [];
   private victoryEmitted = false;
 
@@ -75,17 +92,31 @@ export class GameScene extends Phaser.Scene {
     super(GAME_SCENE_KEY);
   }
 
+  preload(): void {
+    for (const asset of Object.values(TILE_ASSETS)) {
+      this.load.image(asset.key, asset.path);
+    }
+
+    for (const asset of Object.values(PLAYER_SPRITE_ASSETS)) {
+      this.load.image(asset.key, asset.path);
+    }
+  }
+
   create(): void {
     this.state = createGameState();
-    this.mapGraphics = this.add.graphics();
-    this.combatGraphics = this.add.graphics();
-    this.playerGraphics = this.add.graphics();
-    this.holdGraphics = this.add.graphics();
+    this.mapGraphics = this.add.graphics().setDepth(DEPTHS.map);
+    this.wallGraphics = this.add.graphics().setDepth(DEPTHS.wallOverlay);
+    this.combatGraphics = this.add.graphics().setDepth(DEPTHS.combat);
+    this.playerImage = this.add
+      .image(0, 0, PLAYER_SPRITE_ASSETS[this.lastPlayerDirection].key)
+      .setDepth(DEPTHS.player)
+      .setOrigin(0.5, 1);
 
     this.input.on('pointerdown', this.handlePointerDown, this);
     this.input.on('pointerup', this.clearHold, this);
     this.input.on('pointerout', this.clearHold, this);
     this.input.keyboard?.on('keydown', this.handleKeyDown, this);
+    this.input.keyboard?.on('keyup', this.handleKeyUp, this);
     this.scale.on('resize', this.renderScene, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.removeSceneListeners, this);
 
@@ -94,59 +125,67 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    this.updateMovementAnimation();
-
-    if (!this.movementAnimation) {
-      tickCombat(this.state, { elapsedMs: delta, nowMs: time });
-      this.recordCombatEffects(time);
-      this.renderScene();
-      this.emitState();
-    }
-
-    this.drawHoldProgress();
+    this.updatePlayerMovement(delta);
+    tickCombat(this.state, { elapsedMs: delta, nowMs: time });
+    this.recordCombatEffects(time);
+    this.renderScene();
+    this.emitState();
   }
 
   private removeSceneListeners(): void {
     this.clearHold();
+    this.clearTileImages();
+    this.clearWallOverlayImages();
+    this.unlockAnimations.clear();
     this.scale.off('resize', this.renderScene, this);
+    this.heldMovementDirections.clear();
     this.input.keyboard?.off('keydown', this.handleKeyDown, this);
+    this.input.keyboard?.off('keyup', this.handleKeyUp, this);
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
-    const move = KEY_MOVES[event.key.toLowerCase()];
+    const direction = getMovementDirectionForKey(event.key);
 
-    if (!move || this.movementAnimation) {
+    if (!direction) {
       return;
     }
 
     event.preventDefault();
+    this.heldMovementDirections.add(direction);
+  }
 
-    const target = {
-      q: this.state.player.coord.q + move.q,
-      r: this.state.player.coord.r + move.r,
-    };
-    const previousCoord = this.state.player.coord;
-    const nextState = movePlayer(this.state, target);
+  private handleKeyUp(event: KeyboardEvent): void {
+    const direction = getMovementDirectionForKey(event.key);
 
-    if (nextState === this.state) {
+    if (!direction) {
+      return;
+    }
+
+    event.preventDefault();
+    this.heldMovementDirections.delete(direction);
+  }
+
+  private updatePlayerMovement(delta: number): void {
+    const vector = getMovementVector(this.heldMovementDirections);
+    const direction = getPlayerDirectionForVector(vector);
+
+    if (direction) {
+      this.lastPlayerDirection = direction;
+    }
+
+    if (vector.x === 0 && vector.y === 0) {
       return;
     }
 
     this.clearHold();
-    this.state = nextState;
-    this.movementAnimation = {
-      from: previousCoord,
-      to: nextState.player.coord,
-      startedAt: this.time.now,
-    };
-    this.renderScene();
+    const distance = this.state.player.moveSpeed * (delta / 1000);
+    movePlayerByWorldDelta(this.state, {
+      x: vector.x * distance,
+      y: vector.y * distance,
+    });
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.movementAnimation) {
-      return;
-    }
-
     const cell = this.findCellAt(pointer.x, pointer.y);
 
     if (!cell || cell.revealed || axialDistance(this.state.player.coord, cell.coord) !== 1) {
@@ -155,24 +194,36 @@ export class GameScene extends Phaser.Scene {
 
     this.clearHold();
     this.holdTargetKey = cell.key;
-    this.holdStartedAt = this.time.now;
+    this.unlockAnimations.set(cell.key, { startedAt: this.time.now });
+    this.renderScene();
+
     this.holdTimer = this.time.delayedCall(HOLD_DURATION_MS, () => {
       if (this.holdTargetKey !== cell.key) {
         return;
       }
 
-      this.state = revealCell(this.state, cell.key);
-      this.clearHold();
+      const nextState = revealCell(this.state, cell.key);
+
+      this.state = nextState;
+      this.holdTimer = null;
+      this.holdTargetKey = null;
+      this.unlockAnimations.delete(cell.key);
       this.renderScene();
       this.emitState();
     });
   }
 
   private clearHold(): void {
+    const holdTargetKey = this.holdTargetKey;
+
     this.holdTimer?.remove(false);
     this.holdTimer = null;
     this.holdTargetKey = null;
-    this.holdGraphics?.clear();
+
+    if (holdTargetKey) {
+      this.unlockAnimations.delete(holdTargetKey);
+      this.renderScene();
+    }
   }
 
   private emitState(): void {
@@ -186,13 +237,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderScene(): void {
-    if (!this.mapGraphics || !this.playerGraphics || !this.combatGraphics) {
+    if (!this.mapGraphics || !this.wallGraphics || !this.playerImage || !this.combatGraphics) {
       return;
     }
 
     this.updateLayout();
     this.mapGraphics.clear();
+    this.wallGraphics.clear();
     this.combatGraphics.clear();
+    const activeTileKeys = new Set<string>();
+    const activeWallOverlayKeys = new Set<string>();
 
     for (const cell of this.state.maze.cells.values()) {
       const center = this.cellCenters.get(cell.key);
@@ -201,9 +255,20 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
+      const visual = this.getCellRenderVisual(cell);
+
+      if (visual.kind === 'texture') {
+        activeTileKeys.add(cell.key);
+        this.drawTileImage(cell.key, visual.key, center);
+        this.drawCellOverlay(cell, center, activeWallOverlayKeys);
+        continue;
+      }
+
       this.drawHex(this.mapGraphics, center, this.hexSize, this.getCellFill(cell));
     }
 
+    this.pruneTileImages(activeTileKeys);
+    this.pruneWallOverlayImages(activeWallOverlayKeys);
     this.drawCombatEntities();
     this.drawAttackEffects();
     this.drawPlayer();
@@ -212,7 +277,7 @@ export class GameScene extends Phaser.Scene {
   private updateLayout(): void {
     const layout = calculateMapLayout({
       cells: this.state.maze.cells.values(),
-      playerCoord: this.getRenderPlayerCoord(),
+      focusWorldPosition: this.state.player.worldPosition,
       viewport: {
         width: this.scale.width,
         height: this.scale.height,
@@ -241,6 +306,183 @@ export class GameScene extends Phaser.Scene {
     }
 
     return COLORS.empty;
+  }
+
+  private getCellRenderVisual(cell: MazeCell) {
+    const unlockAnimation = this.unlockAnimations.get(cell.key);
+
+    if (unlockAnimation) {
+      const visual = getUnlockAnimationVisual(this.time.now - unlockAnimation.startedAt);
+
+      if (visual) {
+        return visual;
+      }
+
+      this.unlockAnimations.delete(cell.key);
+    }
+
+    return getCellTileVisual(cell);
+  }
+
+  private drawTileImage(key: string, textureKey: string, center: ScreenPoint): void {
+    const displaySize = getHexTileDisplaySize(this.hexSize);
+    let image = this.tileImages.get(key);
+
+    if (!image) {
+      image = this.add.image(center.x, center.y, textureKey).setDepth(DEPTHS.coveredTiles);
+      this.tileImages.set(key, image);
+    }
+
+    image
+      .setTexture(textureKey)
+      .setPosition(center.x, center.y)
+      .setDisplaySize(displaySize.width, displaySize.height)
+      .setVisible(true);
+  }
+
+  private drawCellOverlay(cell: MazeCell, center: ScreenPoint, activeWallOverlayKeys: Set<string>): void {
+    if (!cell.revealed) {
+      return;
+    }
+
+    if (cell.type === 'wall') {
+      this.drawWallOverlay(cell.key, center, getRevealedWallConnections(cell, this.state.maze.cells), activeWallOverlayKeys);
+      return;
+    }
+
+    if (cell.type === 'exit') {
+      this.drawExitOverlay(center);
+      return;
+    }
+
+    if (cell.type === 'monsterNest') {
+      this.drawMonsterNestOverlay(center);
+    }
+  }
+
+  private drawWallOverlay(
+    cellKey: string,
+    center: ScreenPoint,
+    connections: readonly boolean[],
+    activeWallOverlayKeys: Set<string>,
+  ): void {
+    const segments = getWallOverlaySegments(connections);
+    const orderedSegments = [
+      ...segments.filter((segment) => segment.kind === 'connector'),
+      ...segments.filter((segment) => segment.kind === 'post'),
+    ];
+
+    for (const segment of orderedSegments) {
+      this.drawWallOverlaySegment(cellKey, center, segment, activeWallOverlayKeys);
+    }
+  }
+
+  private drawWallOverlaySegment(
+    cellKey: string,
+    center: ScreenPoint,
+    segment: WallOverlaySegment,
+    activeWallOverlayKeys: Set<string>,
+  ): void {
+    const key = `${cellKey}:wall:${segment.id}`;
+    const placement = this.getWallOverlaySegmentPlacement(center, segment);
+    let image = this.wallOverlayImages.get(key);
+
+    if (!image) {
+      image = this.add.image(placement.x, placement.y, placement.textureKey).setDepth(DEPTHS.wallOverlay);
+      this.wallOverlayImages.set(key, image);
+    }
+
+    activeWallOverlayKeys.add(key);
+    image
+      .setTexture(placement.textureKey)
+      .setPosition(placement.x, placement.y)
+      .setRotation(placement.rotation)
+      .setDisplaySize(placement.width, placement.height)
+      .setVisible(true);
+  }
+
+  private getWallOverlaySegmentPlacement(center: ScreenPoint, segment: WallOverlaySegment) {
+    if (segment.kind === 'post') {
+      const size = this.hexSize;
+
+      return {
+        textureKey: TILE_ASSETS.wallPostStone.key,
+        x: center.x,
+        y: center.y,
+        rotation: 0,
+        width: size,
+        height: size,
+      };
+    }
+
+    const directionIndex = segment.directionIndex ?? 0;
+    const direction = this.getWallDirectionVector(directionIndex);
+    const width = this.hexSize * 0.9;
+    const aspectRatio = 235 / 720;
+
+    return {
+      textureKey: TILE_ASSETS.wallConnectorStone.key,
+      x: center.x + direction.x * this.hexSize * 0.86,
+      y: center.y + direction.y * this.hexSize * 0.86,
+      rotation: Math.atan2(direction.y, direction.x),
+      width,
+      height: width * aspectRatio,
+    };
+  }
+
+  private drawExitOverlay(center: ScreenPoint): void {
+    this.drawHex(this.wallGraphics, center, this.hexSize * 0.28, COLORS.exit);
+  }
+
+  private drawMonsterNestOverlay(center: ScreenPoint): void {
+    this.wallGraphics.fillStyle(COLORS.monsterNest, 1);
+    this.wallGraphics.lineStyle(2, COLORS.stroke, 0.9);
+    this.wallGraphics.fillCircle(center.x, center.y, this.hexSize * 0.24);
+    this.wallGraphics.strokeCircle(center.x, center.y, this.hexSize * 0.24);
+  }
+
+  private getWallDirectionVector(directionIndex: number): ScreenPoint {
+    const direction = axialToPixel(HEX_DIRECTIONS[directionIndex], 1);
+    const length = Math.hypot(direction.x, direction.y);
+
+    return {
+      x: direction.x / length,
+      y: direction.y / length,
+    };
+  }
+
+  private pruneTileImages(activeKeys: Set<string>): void {
+    for (const [key, image] of this.tileImages) {
+      if (!activeKeys.has(key)) {
+        image.destroy();
+        this.tileImages.delete(key);
+      }
+    }
+  }
+
+  private pruneWallOverlayImages(activeKeys: Set<string>): void {
+    for (const [key, image] of this.wallOverlayImages) {
+      if (!activeKeys.has(key)) {
+        image.destroy();
+        this.wallOverlayImages.delete(key);
+      }
+    }
+  }
+
+  private clearTileImages(): void {
+    for (const image of this.tileImages.values()) {
+      image.destroy();
+    }
+
+    this.tileImages.clear();
+  }
+
+  private clearWallOverlayImages(): void {
+    for (const image of this.wallOverlayImages.values()) {
+      image.destroy();
+    }
+
+    this.wallOverlayImages.clear();
   }
 
   private drawCombatEntities(): void {
@@ -284,17 +526,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPlayer(): void {
-    this.playerGraphics.clear();
-
-    this.playerGraphics.fillStyle(COLORS.player, 1);
-    this.playerGraphics.lineStyle(3, COLORS.stroke, 1);
     const center = {
       x: this.scale.width / 2,
       y: this.scale.height / 2,
     };
+    const displaySize = getPlayerSpriteDisplaySize(this.hexSize);
 
-    this.playerGraphics.fillCircle(center.x, center.y, this.hexSize * 0.35);
-    this.playerGraphics.strokeCircle(center.x, center.y, this.hexSize * 0.35);
+    this.playerImage
+      .setTexture(PLAYER_SPRITE_ASSETS[this.lastPlayerDirection].key)
+      .setPosition(center.x, center.y)
+      .setDisplaySize(displaySize.width, displaySize.height)
+      .setVisible(true);
   }
 
   private recordCombatEffects(nowMs: number): void {
@@ -353,43 +595,6 @@ export class GameScene extends Phaser.Scene {
     graphics.fillRect(x, y, fillWidth, height);
   }
 
-  private updateMovementAnimation(): void {
-    if (!this.movementAnimation) {
-      return;
-    }
-
-    const progress = this.getMovementProgress();
-
-    if (progress >= 1) {
-      this.movementAnimation = null;
-      this.renderScene();
-      this.emitState();
-      return;
-    }
-
-    this.renderScene();
-  }
-
-  private getRenderPlayerCoord(): AxialCoord {
-    if (!this.movementAnimation) {
-      return this.state.player.coord;
-    }
-
-    return interpolateAxialCoord(
-      this.movementAnimation.from,
-      this.movementAnimation.to,
-      Phaser.Math.Easing.Sine.InOut(this.getMovementProgress()),
-    );
-  }
-
-  private getMovementProgress(): number {
-    if (!this.movementAnimation) {
-      return 1;
-    }
-
-    return Phaser.Math.Clamp((this.time.now - this.movementAnimation.startedAt) / MOVE_DURATION_MS, 0, 1);
-  }
-
   private drawHex(
     graphics: Phaser.GameObjects.Graphics,
     center: ScreenPoint,
@@ -410,25 +615,6 @@ export class GameScene extends Phaser.Scene {
     graphics.closePath();
     graphics.fillPath();
     graphics.strokePath();
-  }
-
-  private drawHoldProgress(): void {
-    this.holdGraphics.clear();
-
-    if (!this.holdTargetKey) {
-      return;
-    }
-
-    const center = this.cellCenters.get(this.holdTargetKey);
-
-    if (!center) {
-      return;
-    }
-
-    const progress = Phaser.Math.Clamp((this.time.now - this.holdStartedAt) / HOLD_DURATION_MS, 0, 1);
-
-    this.holdGraphics.fillStyle(COLORS.hold, 0.2 + progress * 0.45);
-    this.holdGraphics.fillCircle(center.x, center.y, this.hexSize * (0.2 + progress * 0.4));
   }
 
   private findCellAt(x: number, y: number): MazeCell | null {
