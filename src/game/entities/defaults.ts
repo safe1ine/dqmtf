@@ -4,6 +4,7 @@ export const ENTITY_DEFAULTS = {
     attack: 10,
     attackRange: 3,
     attackIntervalMs: 700,
+    moveSpeed: 220,
   },
   monster: {
     hp: 20,

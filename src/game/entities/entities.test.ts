@@ -50,6 +50,13 @@ describe('entity classes', () => {
     expect(nest.spawnIntervalMs).toBe(ENTITY_DEFAULTS.monsterNest.spawnIntervalMs);
   });
 
+  it('tracks player world position and movement speed', () => {
+    const player = new PlayerEntity({ id: 'player', coord: { q: 0, r: 0 } });
+
+    expect(player.worldPosition).toEqual({ x: 0, y: 0 });
+    expect(player.moveSpeed).toBe(ENTITY_DEFAULTS.player.moveSpeed);
+  });
+
   it('keeps wall and living monster nest cells blocked, empty cells walkable', () => {
     const empty = new EmptyCellEntity({ id: 'empty', coord: { q: 0, r: 0 }, key: '0,0', revealed: true });
     const wall = new WallCellEntity({ id: 'wall', coord: { q: 1, r: 0 }, key: '1,0', revealed: true });
