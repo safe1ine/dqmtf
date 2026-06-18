@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getHexKey } from './hex';
-import { calculateMapLayout, MAP_HEX_SIZE } from './mapLayout';
+import { calculateMapLayout, interpolateAxialCoord, MAP_HEX_SIZE } from './mapLayout';
 
 describe('calculateMapLayout', () => {
   const cells = [
@@ -44,5 +44,28 @@ describe('calculateMapLayout', () => {
 
     expect(rightNeighbor?.x).toBeCloseTo(804, 3);
     expect(rightNeighbor?.y).toBeCloseTo(405.0, 1);
+  });
+
+  it('interpolates between axial coordinates for smooth movement', () => {
+    expect(interpolateAxialCoord({ q: 0, r: 0 }, { q: 1, r: 0 }, 0.5)).toEqual({
+      q: 0.5,
+      r: 0,
+    });
+    expect(interpolateAxialCoord({ q: 0, r: 0 }, { q: 0, r: 1 }, 0.25)).toEqual({
+      q: 0,
+      r: 0.25,
+    });
+  });
+
+  it('supports fractional focus coordinates during movement animation', () => {
+    const layout = calculateMapLayout({
+      cells,
+      playerCoord: { q: 0.5, r: 0 },
+      viewport: { width: 1440, height: 713 },
+    });
+    const originCenter = layout.cellCenters.get(getHexKey({ q: 0, r: 0 }));
+
+    expect(originCenter?.x).toBeCloseTo(678, 3);
+    expect(originCenter?.y).toBeCloseTo(332.251, 3);
   });
 });

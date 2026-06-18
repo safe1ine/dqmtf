@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { type AxialCoord, getHexKey } from './hex';
-import { calculateMapLayout, type ScreenPoint } from './mapLayout';
+import { type AxialCoord } from './hex';
+import { calculateMapLayout, interpolateAxialCoord, type ScreenPoint } from './mapLayout';
 import { type MazeCell } from './maze';
 import {
   createGameState,
@@ -13,6 +13,7 @@ import {
 export const GAME_SCENE_KEY = 'GameScene';
 
 const HOLD_DURATION_MS = 600;
+const MOVE_DURATION_MS = 220;
 
 const COLORS = {
   covered: 0x6f776b,
@@ -35,6 +36,12 @@ const KEY_MOVES: Record<string, AxialCoord> = {
   s: { q: 0, r: 1 },
 };
 
+interface MovementAnimation {
+  from: AxialCoord;
+  to: AxialCoord;
+  startedAt: number;
+}
+
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
   private mapGraphics!: Phaser.GameObjects.Graphics;
@@ -45,6 +52,7 @@ export class GameScene extends Phaser.Scene {
   private holdTargetKey: string | null = null;
   private holdStartedAt = 0;
   private holdTimer: Phaser.Time.TimerEvent | null = null;
+  private movementAnimation: MovementAnimation | null = null;
   private victoryEmitted = false;
 
   constructor() {
@@ -69,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(): void {
+    this.updateMovementAnimation();
     this.drawHoldProgress();
   }
 
@@ -81,7 +90,7 @@ export class GameScene extends Phaser.Scene {
   private handleKeyDown(event: KeyboardEvent): void {
     const move = KEY_MOVES[event.key.toLowerCase()];
 
-    if (!move) {
+    if (!move || this.movementAnimation) {
       return;
     }
 
@@ -91,18 +100,28 @@ export class GameScene extends Phaser.Scene {
       q: this.state.player.coord.q + move.q,
       r: this.state.player.coord.r + move.r,
     };
+    const previousCoord = this.state.player.coord;
     const nextState = movePlayer(this.state, target);
 
     if (nextState === this.state) {
       return;
     }
 
+    this.clearHold();
     this.state = nextState;
+    this.movementAnimation = {
+      from: previousCoord,
+      to: nextState.player.coord,
+      startedAt: this.time.now,
+    };
     this.renderScene();
-    this.emitState();
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.movementAnimation) {
+      return;
+    }
+
     const cell = this.findCellAt(pointer.x, pointer.y);
 
     if (!cell || cell.revealed) {
@@ -165,7 +184,7 @@ export class GameScene extends Phaser.Scene {
   private updateLayout(): void {
     const layout = calculateMapLayout({
       cells: this.state.maze.cells.values(),
-      playerCoord: this.state.player.coord,
+      playerCoord: this.getRenderPlayerCoord(),
       viewport: {
         width: this.scale.width,
         height: this.scale.height,
@@ -193,19 +212,54 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPlayer(): void {
-    const playerKey = getHexKey(this.state.player.coord);
-    const center = this.cellCenters.get(playerKey);
-
     this.playerGraphics.clear();
-
-    if (!center) {
-      return;
-    }
 
     this.playerGraphics.fillStyle(COLORS.player, 1);
     this.playerGraphics.lineStyle(3, COLORS.stroke, 1);
+    const center = {
+      x: this.scale.width / 2,
+      y: this.scale.height / 2,
+    };
+
     this.playerGraphics.fillCircle(center.x, center.y, this.hexSize * 0.35);
     this.playerGraphics.strokeCircle(center.x, center.y, this.hexSize * 0.35);
+  }
+
+  private updateMovementAnimation(): void {
+    if (!this.movementAnimation) {
+      return;
+    }
+
+    const progress = this.getMovementProgress();
+
+    if (progress >= 1) {
+      this.movementAnimation = null;
+      this.renderScene();
+      this.emitState();
+      return;
+    }
+
+    this.renderScene();
+  }
+
+  private getRenderPlayerCoord(): AxialCoord {
+    if (!this.movementAnimation) {
+      return this.state.player.coord;
+    }
+
+    return interpolateAxialCoord(
+      this.movementAnimation.from,
+      this.movementAnimation.to,
+      Phaser.Math.Easing.Sine.InOut(this.getMovementProgress()),
+    );
+  }
+
+  private getMovementProgress(): number {
+    if (!this.movementAnimation) {
+      return 1;
+    }
+
+    return Phaser.Math.Clamp((this.time.now - this.movementAnimation.startedAt) / MOVE_DURATION_MS, 0, 1);
   }
 
   private drawHex(

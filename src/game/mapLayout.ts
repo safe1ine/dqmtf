@@ -22,6 +22,19 @@ export interface MapLayout {
   cellCenters: Map<string, ScreenPoint>;
 }
 
+export function interpolateAxialCoord(
+  from: AxialCoord,
+  to: AxialCoord,
+  progress: number,
+): AxialCoord {
+  const clampedProgress = Math.min(1, Math.max(0, progress));
+
+  return {
+    q: from.q + (to.q - from.q) * clampedProgress,
+    r: from.r + (to.r - from.r) * clampedProgress,
+  };
+}
+
 export function calculateMapLayout(options: {
   cells: Iterable<LayoutCell>;
   playerCoord: AxialCoord;
