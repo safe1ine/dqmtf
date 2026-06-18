@@ -17,7 +17,7 @@ describe('player lower-body collision geometry', () => {
 
   it('derives lower-body collision size from the displayed player size', () => {
     expect(getPlayerLowerBodyCollisionSize(56)).toEqual({
-      width: 30.240000000000002,
+      width: 60.480000000000004,
       height: 67.2,
     });
   });
@@ -27,12 +27,12 @@ describe('player lower-body collision geometry', () => {
 
     expect(samples).toEqual([
       { x: 100, y: 200 },
-      { x: 84.88, y: 183.2 },
-      { x: 115.12, y: 183.2 },
-      { x: 84.88, y: 166.4 },
-      { x: 115.12, y: 166.4 },
-      { x: 84.88, y: 132.8 },
-      { x: 115.12, y: 132.8 },
+      { x: 69.76, y: 183.2 },
+      { x: 130.24, y: 183.2 },
+      { x: 69.76, y: 166.4 },
+      { x: 130.24, y: 166.4 },
+      { x: 69.76, y: 132.8 },
+      { x: 130.24, y: 132.8 },
     ]);
   });
 });

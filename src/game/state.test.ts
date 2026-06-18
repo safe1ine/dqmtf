@@ -120,13 +120,13 @@ describe('game state', () => {
     wall!.type = 'wall';
     wall!.revealed = true;
     state.player.coord = { q: 0, r: 0 };
-    state.player.worldPosition = { x: 15, y: 0 };
+    state.player.worldPosition = { x: 0, y: 30 };
 
     movePlayerByWorldDelta(state, { x: 10, y: 0 });
 
     expect(state.player.coord).toEqual({ q: 0, r: 0 });
-    expect(state.player.worldPosition.x).toBeGreaterThan(15);
-    expect(state.player.worldPosition.y).toBeGreaterThan(0);
+    expect(state.player.worldPosition.x).toBeGreaterThan(0);
+    expect(state.player.worldPosition.y).toBeGreaterThan(30);
   });
 
   it('blocks movement when a lower-body sample point enters a wall', () => {
