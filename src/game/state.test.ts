@@ -9,7 +9,7 @@ describe('game state', () => {
     expect(state.player.coord).toEqual({ q: 0, r: 0 });
     expect(state.player.hp).toBe(100);
     expect(state.player.attack).toBe(10);
-    expect(state.stats.totalCells).toBe(127);
+    expect(state.stats.totalCells).toBe(331);
     expect(state.stats.revealedCells).toBe(7);
     expect(state.status).toBe('exploring');
   });
@@ -75,7 +75,7 @@ describe('game state', () => {
     const state = createGameState(12);
 
     expect(getGameSummary(state)).toEqual({
-      totalCells: 127,
+      totalCells: 331,
       revealedCells: 7,
       hp: 100,
       attack: 10,

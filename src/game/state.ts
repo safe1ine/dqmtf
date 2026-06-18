@@ -1,6 +1,8 @@
 import { type AxialCoord, axialDistance, getHexKey } from './hex';
 import { generateMaze, type MazeData } from './maze';
 
+export const GAME_MAP_RADIUS = 10;
+
 export type GameStatus = 'exploring' | 'victory';
 
 export interface PlayerState {
@@ -41,7 +43,7 @@ function countRevealed(maze: MazeData): number {
 }
 
 export function createGameState(seed?: number): GameState {
-  const maze = generateMaze({ radius: 6, seed });
+  const maze = generateMaze({ radius: GAME_MAP_RADIUS, seed });
 
   return {
     maze,

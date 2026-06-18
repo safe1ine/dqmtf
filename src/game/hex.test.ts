@@ -13,6 +13,10 @@ describe('hex grid helpers', () => {
     expect(createHexGrid(6)).toHaveLength(127);
   });
 
+  it('creates 331 cells for radius 10', () => {
+    expect(createHexGrid(10)).toHaveLength(331);
+  });
+
   it('uses stable coordinate keys', () => {
     expect(getHexKey({ q: -2, r: 5 })).toBe('-2,5');
   });

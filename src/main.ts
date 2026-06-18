@@ -65,11 +65,11 @@ function renderGame(): void {
           <header class="status-bar" aria-label="游戏状态">
             <div class="status-item">
               <span class="status-label">总格子</span>
-              <strong id="total-cells">127</strong>
+              <strong id="total-cells">331</strong>
             </div>
             <div class="status-item">
               <span class="status-label">已解锁</span>
-              <strong id="revealed-cells">7 / 127</strong>
+              <strong id="revealed-cells">7 / 331</strong>
             </div>
             <div class="status-item">
               <span class="status-label">血量</span>

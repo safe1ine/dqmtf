@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { type AxialCoord, axialToPixel, getHexKey } from './hex';
+import { type AxialCoord, getHexKey } from './hex';
+import { calculateMapLayout, type ScreenPoint } from './mapLayout';
 import { type MazeCell } from './maze';
 import {
   createGameState,
@@ -12,7 +13,6 @@ import {
 export const GAME_SCENE_KEY = 'GameScene';
 
 const HOLD_DURATION_MS = 600;
-const MAP_PADDING = 44;
 
 const COLORS = {
   covered: 0x6f776b,
@@ -34,11 +34,6 @@ const KEY_MOVES: Record<string, AxialCoord> = {
   arrowdown: { q: 0, r: 1 },
   s: { q: 0, r: 1 },
 };
-
-interface ScreenPoint {
-  x: number;
-  y: number;
-}
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
@@ -168,30 +163,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateLayout(): void {
-    const width = this.scale.width;
-    const height = this.scale.height;
-    const radius = this.state.maze.radius;
-    const availableWidth = Math.max(320, width) - MAP_PADDING * 2;
-    const availableHeight = Math.max(240, height) - MAP_PADDING * 2;
-    const hexWidthUnits = radius * 3 + 2;
-    const hexHeightUnits = Math.sqrt(3) * (radius * 2 + 1);
+    const layout = calculateMapLayout({
+      cells: this.state.maze.cells.values(),
+      playerCoord: this.state.player.coord,
+      viewport: {
+        width: this.scale.width,
+        height: this.scale.height,
+      },
+    });
 
-    this.hexSize = Math.max(
-      12,
-      Math.min(availableWidth / hexWidthUnits, availableHeight / hexHeightUnits),
-    );
-
-    const centerX = width / 2;
-    const centerY = height / 2;
-    this.cellCenters.clear();
-
-    for (const cell of this.state.maze.cells.values()) {
-      const pixel = axialToPixel(cell.coord, this.hexSize);
-      this.cellCenters.set(cell.key, {
-        x: centerX + pixel.x,
-        y: centerY + pixel.y,
-      });
-    }
+    this.hexSize = layout.hexSize;
+    this.cellCenters = layout.cellCenters;
   }
 
   private getCellFill(cell: MazeCell): number {

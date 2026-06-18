@@ -90,19 +90,19 @@ function hasKeyboardPathToExit(
 }
 
 describe('generateMaze', () => {
-  it('creates a radius 6 maze with 127 cells and 7 revealed safe cells', () => {
-    const maze = generateMaze({ radius: 6, seed: 1 });
+  it('creates a radius 10 maze with 331 cells and 7 revealed safe cells', () => {
+    const maze = generateMaze({ radius: 10, seed: 1 });
     const revealedCells = [...maze.cells.values()].filter((cell) => cell.revealed);
 
-    expect(maze.radius).toBe(6);
-    expect(maze.cells.size).toBe(127);
+    expect(maze.radius).toBe(10);
+    expect(maze.cells.size).toBe(331);
     expect(revealedCells).toHaveLength(7);
-    expect(maze.totalCells).toBe(127);
+    expect(maze.totalCells).toBe(331);
     expect(maze.revealedCount).toBe(7);
   });
 
   it('keeps center and neighbor ring revealed and empty', () => {
-    const maze = generateMaze({ radius: 6, seed: 2 });
+    const maze = generateMaze({ radius: 10, seed: 2 });
     const safeCells = [...maze.cells.values()].filter(
       (cell) => axialDistance(cell.coord, { q: 0, r: 0 }) <= 1,
     );
@@ -112,18 +112,18 @@ describe('generateMaze', () => {
   });
 
   it('places the exit on the outer ring and keeps it initially covered', () => {
-    const maze = generateMaze({ radius: 6, seed: 3 });
+    const maze = generateMaze({ radius: 10, seed: 3 });
     const exit = maze.cells.get(maze.exitKey);
 
     expect(exit).toBeDefined();
     expect(exit?.type).toBe('exit');
     expect(exit?.revealed).toBe(false);
-    expect(exit ? axialDistance(exit.coord, { q: 0, r: 0 }) : 0).toBe(6);
+    expect(exit ? axialDistance(exit.coord, { q: 0, r: 0 }) : 0).toBe(10);
   });
 
   it('always leaves a walkable path from start to exit across seeded maps', () => {
     for (let seed = 1; seed <= 50; seed += 1) {
-      const maze = generateMaze({ radius: 6, seed });
+      const maze = generateMaze({ radius: 10, seed });
 
       expect(hasPathToExit(maze.cells, maze.startKey, maze.exitKey)).toBe(true);
     }
@@ -131,7 +131,7 @@ describe('generateMaze', () => {
 
   it('always leaves a keyboard-traversable path from start to exit', () => {
     for (let seed = 1; seed <= 50; seed += 1) {
-      const maze = generateMaze({ radius: 6, seed });
+      const maze = generateMaze({ radius: 10, seed });
 
       expect(hasKeyboardPathToExit(maze.cells, maze.startKey, maze.exitKey)).toBe(true);
     }
