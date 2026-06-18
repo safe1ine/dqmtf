@@ -3,7 +3,6 @@ import {
   axialDistance,
   createHexGrid,
   getHexKey,
-  getNeighbors,
 } from './hex';
 
 export type CellType = 'empty' | 'wall' | 'exit';
@@ -48,13 +47,19 @@ function buildPathToExit(exit: AxialCoord): AxialCoord[] {
   const path: AxialCoord[] = [{ q: 0, r: 0 }];
   let current: AxialCoord = { q: 0, r: 0 };
 
-  while (current.q !== exit.q || current.r !== exit.r) {
-    const currentDistance = axialDistance(current, exit);
-    const candidates = getNeighbors(current)
-      .filter((candidate) => axialDistance(candidate, exit) < currentDistance)
-      .sort((a, b) => axialDistance(a, exit) - axialDistance(b, exit));
+  while (current.q !== exit.q) {
+    current = {
+      q: current.q + Math.sign(exit.q - current.q),
+      r: current.r,
+    };
+    path.push(current);
+  }
 
-    current = candidates[0];
+  while (current.r !== exit.r) {
+    current = {
+      q: current.q,
+      r: current.r + Math.sign(exit.r - current.r),
+    };
     path.push(current);
   }
 

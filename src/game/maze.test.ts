@@ -39,6 +39,56 @@ function hasPathToExit(cells: Map<string, MazeCell>, startKey: string, exitKey: 
   return false;
 }
 
+function hasKeyboardPathToExit(
+  cells: Map<string, MazeCell>,
+  startKey: string,
+  exitKey: string,
+): boolean {
+  const keyboardDirections = [
+    { q: 1, r: 0 },
+    { q: -1, r: 0 },
+    { q: 0, r: -1 },
+    { q: 0, r: 1 },
+  ];
+  const queue = [startKey];
+  const visited = new Set(queue);
+
+  while (queue.length > 0) {
+    const currentKey = queue.shift();
+
+    if (!currentKey) {
+      continue;
+    }
+
+    if (currentKey === exitKey) {
+      return true;
+    }
+
+    const current = cells.get(currentKey);
+
+    if (!current) {
+      continue;
+    }
+
+    for (const direction of keyboardDirections) {
+      const neighborKey = getHexKey({
+        q: current.coord.q + direction.q,
+        r: current.coord.r + direction.r,
+      });
+      const neighborCell = cells.get(neighborKey);
+
+      if (!neighborCell || visited.has(neighborKey) || neighborCell.type === 'wall') {
+        continue;
+      }
+
+      visited.add(neighborKey);
+      queue.push(neighborKey);
+    }
+  }
+
+  return false;
+}
+
 describe('generateMaze', () => {
   it('creates a radius 6 maze with 127 cells and 7 revealed safe cells', () => {
     const maze = generateMaze({ radius: 6, seed: 1 });
@@ -76,6 +126,14 @@ describe('generateMaze', () => {
       const maze = generateMaze({ radius: 6, seed });
 
       expect(hasPathToExit(maze.cells, maze.startKey, maze.exitKey)).toBe(true);
+    }
+  });
+
+  it('always leaves a keyboard-traversable path from start to exit', () => {
+    for (let seed = 1; seed <= 50; seed += 1) {
+      const maze = generateMaze({ radius: 6, seed });
+
+      expect(hasKeyboardPathToExit(maze.cells, maze.startKey, maze.exitKey)).toBe(true);
     }
   });
 });
