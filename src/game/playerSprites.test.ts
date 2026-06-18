@@ -32,10 +32,10 @@ describe('player sprite helpers', () => {
     expect(getPlayerDirectionForVector({ x: 0, y: 0 })).toBeNull();
   });
 
-  it('scales the character to 2 hexes tall while preserving the square source aspect', () => {
+  it('scales the character to 1.2 hexes tall while preserving the square source aspect', () => {
     expect(getPlayerSpriteDisplaySize(56)).toEqual({
-      width: 112,
-      height: 112,
+      width: 67.2,
+      height: 67.2,
     });
   });
 });

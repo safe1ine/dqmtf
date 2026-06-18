@@ -10,7 +10,7 @@ export type PlayerDirection =
   | 'left'
   | 'frontLeft';
 
-export const PLAYER_SPRITE_DISPLAY_HEIGHT_HEXES = 2;
+export const PLAYER_SPRITE_DISPLAY_HEIGHT_HEXES = 1.2;
 export const PLAYER_SPRITE_DISPLAY_ASPECT_RATIO = 1;
 
 export const PLAYER_SPRITE_ASSETS: Record<PlayerDirection, { key: string; path: string }> = {
