@@ -68,6 +68,11 @@ export interface WallOverlaySegment {
   directionIndex: number | null;
 }
 
+export interface WallOverlayDisplaySize {
+  width: number;
+  height: number;
+}
+
 export function getCellTileVisual(cell: MazeCell): CellTileVisual {
   if (!cell.revealed) {
     return {
@@ -121,6 +126,23 @@ export function getWallOverlaySegments(connections: WallConnections): WallOverla
     },
     ...connectedSegments,
   ];
+}
+
+export function getWallOverlayDisplaySize(
+  hexSize: number,
+  kind: WallOverlaySegment['kind'],
+): WallOverlayDisplaySize {
+  if (kind === 'post') {
+    return {
+      width: hexSize,
+      height: hexSize,
+    };
+  }
+
+  return {
+    width: hexSize * 0.96,
+    height: hexSize * 0.68,
+  };
 }
 
 export function getHexTileDisplaySize(hexSize: number): { width: number; height: number } {

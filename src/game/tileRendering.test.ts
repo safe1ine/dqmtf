@@ -3,6 +3,7 @@ import {
   getCellTileVisual,
   getHexTileDisplaySize,
   getRevealedWallConnections,
+  getWallOverlayDisplaySize,
   getWallOverlaySegments,
   getUnlockAnimationVisual,
   TILE_ASSETS,
@@ -110,6 +111,19 @@ describe('tile rendering helpers', () => {
         directionIndex: 0,
       },
     ]);
+  });
+
+  it('sizes wall posts large and connectors visibly thick', () => {
+    const hexSize = 56;
+
+    expect(getWallOverlayDisplaySize(hexSize, 'post')).toEqual({
+      width: hexSize,
+      height: hexSize,
+    });
+    expect(getWallOverlayDisplaySize(hexSize, 'connector')).toEqual({
+      width: hexSize * 0.96,
+      height: hexSize * 0.68,
+    });
   });
 
   it('matches a flat-top hex bounding box for texture display size', () => {

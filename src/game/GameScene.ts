@@ -18,6 +18,7 @@ import {
   getCellTileVisual,
   getHexTileDisplaySize,
   getRevealedWallConnections,
+  getWallOverlayDisplaySize,
   getWallOverlaySegments,
   getUnlockAnimationVisual,
   TILE_ASSETS,
@@ -403,30 +404,29 @@ export class GameScene extends Phaser.Scene {
 
   private getWallOverlaySegmentPlacement(center: ScreenPoint, segment: WallOverlaySegment) {
     if (segment.kind === 'post') {
-      const size = this.hexSize;
+      const size = getWallOverlayDisplaySize(this.hexSize, segment.kind);
 
       return {
         textureKey: TILE_ASSETS.wallPostStone.key,
         x: center.x,
         y: center.y,
         rotation: 0,
-        width: size,
-        height: size,
+        width: size.width,
+        height: size.height,
       };
     }
 
     const directionIndex = segment.directionIndex ?? 0;
     const direction = this.getWallDirectionVector(directionIndex);
-    const width = this.hexSize * 0.9;
-    const aspectRatio = 235 / 720;
+    const size = getWallOverlayDisplaySize(this.hexSize, segment.kind);
 
     return {
       textureKey: TILE_ASSETS.wallConnectorStone.key,
       x: center.x + direction.x * this.hexSize * 0.86,
       y: center.y + direction.y * this.hexSize * 0.86,
       rotation: Math.atan2(direction.y, direction.x),
-      width,
-      height: width * aspectRatio,
+      width: size.width,
+      height: size.height,
     };
   }
 
