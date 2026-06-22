@@ -141,7 +141,7 @@ export function getWallOverlayDisplaySize(
 
   return {
     width: hexSize * 0.96,
-    height: hexSize * 0.68,
+    height: hexSize * 0.6,
   };
 }
 

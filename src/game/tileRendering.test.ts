@@ -122,7 +122,7 @@ describe('tile rendering helpers', () => {
     });
     expect(getWallOverlayDisplaySize(hexSize, 'connector')).toEqual({
       width: hexSize * 0.96,
-      height: hexSize * 0.68,
+      height: hexSize * 0.6,
     });
   });
 
